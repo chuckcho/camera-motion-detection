@@ -31,17 +31,18 @@ def find_dominant_mag_ang(flow):
     # If mean(mag) >= thresh1 and std(mag) <= thresh2, this magnitude is
     # considered "dominant"
     min_mag_mean = 0.3 * mag_map.shape[0]/50
-    max_mag_std = 5.0 * mag_map.shape[0]/50
+    # max mag std deviation relative to mean
+    max_mag_std = 0.7
     mag_mean = np.mean(mag_map)
     mag_std = np.std(mag_map)
-    if mag_mean >= min_mag_mean and mag_std <= max_mag_std:
+    if mag_mean >= min_mag_mean and mag_std <= max_mag_std * mag_mean:
         dom_mag = mag_mean
     else:
         dom_mag = float('nan')
 
     # If std(ang) <= thresh3, this angle is considered "dominant"
     # Take cos() to wrap inherently circular angle (0~2*pi, 0=2*pi)
-    max_ang_std = 0.5
+    max_ang_std = 0.6
     ang_std = np.std(np.cos(ang_map))
     if ang_std <= max_ang_std:
         dom_ang = np.mean(ang_map) * 180 / np.pi
@@ -49,10 +50,10 @@ def find_dominant_mag_ang(flow):
         dom_ang = float('nan')
 
     # Only if both dom_mag and dom_ang are good, this frame is good
-    if dom_mag == float('nan'):
-        dom_ang = float('nan')
-    if dom_ang == float('nan'):
-        dom_mag = float('nan')
+    #if math.isnan(dom_mag):
+    #    dom_ang = float('nan')
+    #if math.isnan(dom_ang):
+    #    dom_mag = float('nan')
 
     return dom_mag, dom_ang
 
@@ -65,11 +66,11 @@ def detect_pan_tilt_zoom(videofile):
     visualize = False
 
     # frames per second (skip other frames)
-    # for 30fps videos, sampling_rate of 15 will process 2 frame per second
+    # process only every n-th frame
     sampling_rate = 5
 
     # image resize ratio
-    resize_ratio = 0.2
+    resize_ratio = 0.5
 
     # will ignore short segments of frames in motion (likely to be noisy)
     # min time span = min_frames_for_motion/fps/sampling_rate (second)
@@ -98,7 +99,7 @@ def detect_pan_tilt_zoom(videofile):
     count = 1
 
     if visualize:
-        plot_window_size = 640
+        plot_window_size = 500
         cv2.namedWindow('original', cv2.WINDOW_NORMAL)
         cv2.namedWindow('optical flow', cv2.WINDOW_NORMAL)
         cv2.namedWindow('dominant mag(OF)', cv2.WINDOW_NORMAL)
@@ -115,7 +116,8 @@ def detect_pan_tilt_zoom(videofile):
             break
 
         # skip frames
-        if frame_num % int(round(fps/sampling_rate)) != 0:
+        #if frame_num % int(round(fps/sampling_rate)) != 0:
+        if frame_num % sampling_rate != 0:
             frame_num += 1
             continue
 
@@ -155,22 +157,36 @@ def detect_pan_tilt_zoom(videofile):
         # if enabled, will display (1) original image, (2) optical flow image,
         # and (3) history of dominant optical flow angles
         if visualize:
-            all_dominant_ang_img = np.zeros(
+            cummulative_dom_mag_img = np.zeros(
                                         (180, plot_window_size, 3),
                                         np.uint8
                                         )
             for i in xrange(max(0, count - plot_window_size), count):
                 cv2.circle(
-                    all_dominant_ang_img,
+                    cummulative_dom_mag_img,
                     (
                     count-i,
-                    all_dominant_ang_img.shape[0] - max(
-                            int(all_dominant_ang[i]), 0) # make ang non-negative
+                    cummulative_dom_mag_img.shape[0] - max(
+                            int(cummulative_dom_mag[i])*10, 0)
+                    ),
+                    1, (0, 0, 255), 1)
+            cummulative_dom_ang_img = np.zeros(
+                                        (180, plot_window_size, 3),
+                                        np.uint8
+                                        )
+            for i in xrange(max(0, count - plot_window_size), count):
+                cv2.circle(
+                    cummulative_dom_ang_img,
+                    (
+                    count-i,
+                    cummulative_dom_ang_img.shape[0] - max(
+                            int(cummulative_dom_ang[i]), 0)
                     ),
                     1, (0, 0, 255), 1)
             cv2.imshow('original', frame2)
             cv2.imshow('optical flow', bgr)
-            cv2.imshow('dominant angle(OF)', all_dominant_ang_img)
+            cv2.imshow('dominant mag(OF)', cummulative_dom_mag_img)
+            cv2.imshow('dominant ang(OF)', cummulative_dom_ang_img)
 
             k = cv2.waitKey(30) & 0xff
             if k == 27:
@@ -201,7 +217,7 @@ def main():
     pan, tilt, zoom = detect_pan_tilt_zoom(video)
 
     # human-friendly print out: video, pan, tilt, zoom
-    print "video={}, pan={}, tilt={}, zoom={}".format(
+    print "video=\"{}\", pan={}, tilt={}, zoom={}".format(
             video,
             pan,
             tilt,
