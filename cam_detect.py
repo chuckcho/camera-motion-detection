@@ -198,23 +198,30 @@ def detect_pan_tilt_zoom(videofile):
 
     cap.release()
 
-    print("[debug] cummulative_dom_mag={}".format(cummulative_dom_mag))
-    print("[debug] cummulative_dom_ang={}".format(cummulative_dom_ang))
+    #print("[debug] cummulative_dom_mag={}".format(cummulative_dom_mag))
+    #print("[debug] cummulative_dom_ang={}".format(cummulative_dom_ang))
 
     pan_detected = False
     tilt_detected = False
     zoom_detected = False
 
-    return pan_detected, tilt_detected, zoom_detected
+    return (pan_detected,
+            tilt_detected,
+            zoom_detected,
+            cummulative_dom_mag, 
+            cummulative_dom_ang)
 
 def main():
+    outfile = None
     if len(sys.argv) > 1:
         video = sys.argv[1]
+    if len(sys.argv) > 2:
+        outfile = sys.argv[2]
     else:
         print "Video file must be specified."
         sys.exit(-1)
 
-    pan, tilt, zoom = detect_pan_tilt_zoom(video)
+    (pan, tilt, zoom, dom_mag, dom_ang) = detect_pan_tilt_zoom(video)
 
     # human-friendly print out: video, pan, tilt, zoom
     print "video=\"{}\", pan={}, tilt={}, zoom={}".format(
@@ -223,6 +230,11 @@ def main():
             tilt,
             zoom
             )
+
+    if outfile:
+        with open(outfile, 'w') as f:
+            for line in f:
+                line.
 
 if __name__ == "__main__":
     main()
