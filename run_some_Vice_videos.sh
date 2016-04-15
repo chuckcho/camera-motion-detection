@@ -3,7 +3,7 @@
 #VIDEODIR=/media/TB/Videos/Vice
 #VIDEOIDS=(02 07 16 18)
 
-python ./cam_detect.py /media/TB/Videos/Vice/VICE_02.mov ./VICE_02.txt
-python ./cam_detect.py /media/TB/Videos/Vice/VICE_07.mov ./VICE_07.txt
-python ./cam_detect.py /media/TB/Videos/Vice/VICE_16.mov ./VICE_16.txt
-python ./cam_detect.py /media/TB/Videos/Vice/VICE_18.mov ./VICE_18.txt
+python ./cam_detect.py ~/Vice/VICE_02.mov ./VICE_02.txt VICE_02_overlay.avi
+python ./cam_detect.py ~/Vice/VICE_07.mov ./VICE_07.txt VICE_07_overlay.avi
+python ./cam_detect.py ~/Vice/VICE_16.mov ./VICE_16.txt VICE_16_overlay.avi
+python ./cam_detect.py ~/Vice/VICE_18.mov ./VICE_18.txt VICE_18_overlay.avi
