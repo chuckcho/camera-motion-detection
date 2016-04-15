@@ -31,9 +31,9 @@ def find_dominant_mag_ang(flow):
 
     # If mean(mag) >= thresh1 and std(mag) <= thresh2, this magnitude is
     # considered "dominant"
-    min_mag_mean = 0.3 * mag_map.shape[0]/50
+    min_mag_mean = 0.1 * mag_map.shape[0]/50
     # max mag std deviation relative to mean
-    max_mag_std = 0.7
+    max_mag_std = 0.9
     mag_mean = np.mean(mag_map)
     mag_std = np.std(mag_map)
     if mag_mean >= min_mag_mean and mag_std <= max_mag_std * mag_mean:
@@ -58,7 +58,7 @@ def find_dominant_mag_ang(flow):
 
     return dom_mag, dom_ang
 
-def detect_pan_tilt_zoom(videofile):
+def detect_pan_tilt_zoom(videofile, OF_overlay_videofile=None):
     """
     Detect Pan/Tilt/Zoom camera motion separately
     """
@@ -66,6 +66,7 @@ def detect_pan_tilt_zoom(videofile):
     # display images for debugging/troubleshooting
     visualize = False
     debug = True
+    save_OF_overlay = True
 
     # frames per second (skip other frames)
     # process only every n-th frame
@@ -95,6 +96,8 @@ def detect_pan_tilt_zoom(videofile):
         hsv = np.zeros_like(frame1)
         hsv[..., 1] = 255
 
+    frame_nums = []
+    timestamps = []
     cummulative_dom_mag = []
     cummulative_dom_ang = []
     frame_num = 1
@@ -155,10 +158,14 @@ def detect_pan_tilt_zoom(videofile):
 
         cummulative_dom_mag.append(dom_mag)
         cummulative_dom_ang.append(dom_ang)
+        timestamp = frame_num / fps
+        frame_nums.append(frame_num)
+        timestamps.append(timestamp)
 
         if debug:
-            print "[debug] frame={}, dom_mag={}, dom_ang={}".format(
+            print "[debug] f={}, t={}, dom_mag={}, dom_ang={}".format(
                     frame_num,
+                    timestamp,
                     dom_mag,
                     dom_ang)
 
@@ -206,16 +213,104 @@ def detect_pan_tilt_zoom(videofile):
 
     cap.release()
 
-    #print("[debug] cummulative_dom_mag={}".format(cummulative_dom_mag))
-    #print("[debug] cummulative_dom_ang={}".format(cummulative_dom_ang))
+    # detect pan/tilt/zoom for each frame from dom_mag and dom_ang's (only
+    # if they persists in some consecutive frames)
 
-    pan_detected = False
-    tilt_detected = False
-    zoom_detected = False
+    pan = [False] * len(frame_nums)
+    tilt = [False] * len(frame_nums)
+    zoom = [False] * len(frame_nums)
 
-    return (pan_detected,
-            tilt_detected,
-            zoom_detected,
+    min_consecutive_frames = 3
+    for count, frame in enumerate(frame_nums[:-min_consecutive_frames]):
+        this_clip_pan_or_tilt = True
+        for i in range(count, count + min_consecutive_frames + 1):
+            if math.isnan(cummulative_dom_mag[i]) or \
+                    math.isnan(cummulative_dom_ang[i]):
+                this_clip_pan_or_tilt = False
+
+        if this_clip_pan_or_tilt:
+            if (cummulative_dom_ang[count] >= 45 and \
+                cummulative_dom_ang[count] <= 135) or \
+               (cummulative_dom_ang[count] >= 225 and \
+                cummulative_dom_ang[count] <= 315):
+                for i in range(count, count + min_consecutive_frames + 1):
+                    tilt[i] = True
+            else:
+                for i in range(count, count + min_consecutive_frames + 1):
+                    pan[i] = True
+
+    if OF_overlay_videofile:
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        out = cv2.VideoWriter(OF_overlay_videofile, fourcc, fps/sampling_rate*2, frame1.shape[1::-1])
+
+        # get FPS
+        cap = cv2.VideoCapture(videofile)
+
+        # read first frame and resize
+        ret, frame1 = cap.read()
+        frame1 = cv2.resize(frame1, (0, 0), fx=resize_ratio, fy=resize_ratio)
+        previous_frame = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+
+        frame_num = 1
+        count = 0
+
+        while 1:
+            # read subsequent frame
+            ret, frame2 = cap.read()
+
+            # check for end of video
+            if not ret:
+                break
+
+            # skip frames
+            #if frame_num % int(round(fps/sampling_rate)) != 0:
+            if frame_num % sampling_rate != 0:
+                frame_num += 1
+                continue
+
+            # resize
+            frame2 = cv2.resize(frame2, (0, 0), fx=resize_ratio, fy=resize_ratio)
+            if OF_overlay_videofile:
+                tmp_frame = frame2
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                (width, height) = frame2.shape[1::-1]
+                if tilt[count]:
+                    cv2.putText(tmp_frame,'Tilt',(10,100), font, 1,(0,0,255),2,cv2.LINE_AA)
+                elif pan[count]:
+                    cv2.putText(tmp_frame,'Pan',(10,100), font, 1,(0,255,255),2,cv2.LINE_AA)
+                out.write(tmp_frame)
+
+            next_frame = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+            # get optical flow
+            # refer to http://docs.opencv.org/modules/video/doc/motion_analysis_and_object_tracking.html#calcopticalflowfarneback
+            # for details about each parameter
+            flow = cv2.calcOpticalFlowFarneback(
+                    prev=previous_frame,
+                    next=next_frame,
+                    flow=None,
+                    pyr_scale=0.5,
+                    levels=3,
+                    winsize=15,
+                    iterations=3,
+                    poly_n=5,
+                    poly_sigma=1.2,
+                    flags=0
+                    )
+
+            mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+
+            previous_frame = next_frame
+            frame_num += 1
+            count += 1
+
+        cap.release()
+
+    return (pan,
+            tilt,
+            zoom,
+            frame_nums,
+            timestamps,
             cummulative_dom_mag,
             cummulative_dom_ang)
 
@@ -231,19 +326,38 @@ def main():
     else:
         outfile = None
 
-    (pan, tilt, zoom, dom_mag, dom_ang) = detect_pan_tilt_zoom(video)
+    if len(sys.argv) > 3:
+        overlay_video = sys.argv[3]
+    else:
+        overlay_video = None
+
+    (pan, tilt, zoom, \
+     frame_nums, timestamps, \
+     dom_mag, dom_ang) = detect_pan_tilt_zoom(video,
+             OF_overlay_videofile=overlay_video)
 
     # human-friendly print out: video, pan, tilt, zoom
     print "video=\"{}\", pan={}, tilt={}, zoom={}".format(
             video,
-            pan,
-            tilt,
-            zoom
+            any(pan),
+            any(tilt),
+            any(zoom)
             )
 
+    # save frame-by-frame stats
     if outfile:
         f = open(outfile, 'w')
-        f.write('{}, {}, {}'.format(pan, tilt, zoom))
+        f.write('frame_num, time in sec, dominant OF mag, dominant OF ang, pan, tilt, zoom\n')
+        for count, frame in enumerate(frame_nums[:-2]):
+            f.write('{}, {}, {}, {}, {}, {}, {}\n'.format(
+                    frame_nums[count],
+                    timestamps[count],
+                    dom_mag[count],
+                    dom_ang[count],
+                    pan[count],
+                    tilt[count],
+                    zoom[count]
+                    ))
 
 if __name__ == "__main__":
     main()
