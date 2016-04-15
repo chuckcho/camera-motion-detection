@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-for f in /media/TB/Videos/Vice/*.mov; do
+VIDEOS=~/Vice/*.mov
+for f in ${VIDEOS}; do
   echo Processing video=$f
   filename=$(basename "$f")
   extension="${filename##*.}"

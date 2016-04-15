@@ -7,7 +7,7 @@ Scripts for (1) stationery camera detection and (2) night scene detection
 import sys
 import numpy as np
 import math
-from common.dextro_logger import LOGGER
+#from common.dextro_logger import LOGGER
 
 try:
     import cv2
@@ -19,8 +19,9 @@ try:
         from cv2.cv import CV_CAP_PROP_FPS as CAP_PROP_FPS
         from cv2.cv import CV_CAP_PROP_FRAME_COUNT as CAP_PROP_FRAME_COUNT
 except ImportError as import_error:
-    LOGGER.info('%s | calculate_motion_and_jitterness: Running on a non-CUDA '
-        'server.', import_error)
+    #LOGGER.info('%s | calculate_motion_and_jitterness: Running on a non-CUDA '
+    print('[error] calculate_motion_and_jitterness: Running on a non-CUDA '
+        'server.')
 
 def find_dominant_mag_ang(flow):
     """
@@ -64,6 +65,7 @@ def detect_pan_tilt_zoom(videofile):
 
     # display images for debugging/troubleshooting
     visualize = False
+    debug = True
 
     # frames per second (skip other frames)
     # process only every n-th frame
@@ -154,6 +156,12 @@ def detect_pan_tilt_zoom(videofile):
         cummulative_dom_mag.append(dom_mag)
         cummulative_dom_ang.append(dom_ang)
 
+        if debug:
+            print "[debug] frame={}, dom_mag={}, dom_ang={}".format(
+                    frame_num,
+                    dom_mag,
+                    dom_ang)
+
         # if enabled, will display (1) original image, (2) optical flow image,
         # and (3) history of dominant optical flow angles
         if visualize:
@@ -208,18 +216,20 @@ def detect_pan_tilt_zoom(videofile):
     return (pan_detected,
             tilt_detected,
             zoom_detected,
-            cummulative_dom_mag, 
+            cummulative_dom_mag,
             cummulative_dom_ang)
 
 def main():
-    outfile = None
     if len(sys.argv) > 1:
         video = sys.argv[1]
-    if len(sys.argv) > 2:
-        outfile = sys.argv[2]
     else:
         print "Video file must be specified."
         sys.exit(-1)
+
+    if len(sys.argv) > 2:
+        outfile = sys.argv[2]
+    else:
+        outfile = None
 
     (pan, tilt, zoom, dom_mag, dom_ang) = detect_pan_tilt_zoom(video)
 
@@ -232,9 +242,8 @@ def main():
             )
 
     if outfile:
-        with open(outfile, 'w') as f:
-            for line in f:
-                line.
+        f = open(outfile, 'w')
+        f.write('{}, {}, {}'.format(pan, tilt, zoom))
 
 if __name__ == "__main__":
     main()
