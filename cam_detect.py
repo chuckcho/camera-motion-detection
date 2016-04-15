@@ -31,9 +31,12 @@ def find_dominant_mag_ang(flow):
 
     # If mean(mag) >= thresh1 and std(mag) <= thresh2, this magnitude is
     # considered "dominant"
-    min_mag_mean = 0.1 * mag_map.shape[0]/50
+    min_mag_mean = 0.05 * mag_map.shape[0]/50
     # max mag std deviation relative to mean
-    max_mag_std = 0.9
+    max_mag_std = 1.0
+    max_ang_std = 0.8
+
+    #mag_mean = np.mean(mag_map)
     mag_mean = np.mean(mag_map)
     mag_std = np.std(mag_map)
     if mag_mean >= min_mag_mean and mag_std <= max_mag_std * mag_mean:
@@ -43,10 +46,10 @@ def find_dominant_mag_ang(flow):
 
     # If std(ang) <= thresh3, this angle is considered "dominant"
     # Take cos() to wrap inherently circular angle (0~2*pi, 0=2*pi)
-    max_ang_std = 0.6
     ang_std = np.std(np.cos(ang_map))
     if ang_std <= max_ang_std:
-        dom_ang = np.mean(ang_map) * 180 / np.pi
+        #dom_ang = np.mean(ang_map) * 180 / np.pi
+        dom_ang = np.median(ang_map) * 180 / np.pi
     else:
         dom_ang = float('nan')
 
@@ -160,13 +163,6 @@ def detect_pan_tilt_zoom(videofile, OF_overlay_videofile=None):
         frame_nums.append(frame_num)
         timestamps.append(timestamp)
 
-        if debug:
-            print "[debug] f={}, t={}, dom_mag={}, dom_ang={}".format(
-                    frame_num,
-                    timestamp,
-                    dom_mag,
-                    dom_ang)
-
         # if enabled, will display (1) original image, (2) optical flow image,
         # and (3) history of dominant optical flow angles
         if visualize:
@@ -224,6 +220,8 @@ def detect_pan_tilt_zoom(videofile, OF_overlay_videofile=None):
     for count, frame in enumerate(frame_nums[:-(min_consecutive_frames-1)]):
         if all(np.isfinite(
                 cummulative_dom_ang[count:count+min_consecutive_frames]
+                )) and all(np.isfinite(
+                cummulative_dom_mag[count:count+min_consecutive_frames]
                 )):
             this_clip_pan_or_tilt = True
         else:
@@ -250,14 +248,32 @@ def detect_pan_tilt_zoom(videofile, OF_overlay_videofile=None):
 
             #mean_dom_ang = np.mean(cummulative_dom_ang[count:count+min_consecutive_frames])
             mean_dom_ang = np.median(cummulative_dom_ang[count:count+min_consecutive_frames])
-            print "[debug] mean_dom_ang={}".format(mean_dom_ang)
-            if (mean_dom_ang >= 45+20 and \
+            std_dom_ang = np.std(cummulative_dom_ang[count:count+min_consecutive_frames])
+            if std_dom_ang > 35:
+                # don't tag this frame with either tilt nor pan
+                pass
+            if ((mean_dom_ang >= 45+20 and \
                 mean_dom_ang <= 135-20) or \
                (mean_dom_ang >= 225+20 and \
-                mean_dom_ang <= 315-20):
+               mean_dom_ang <= 315-20)):
                 tilt[count:count+min_consecutive_frames] = True
+                pan[count:count+min_consecutive_frames] = False
             else:
+                tilt[count:count+min_consecutive_frames] = False
                 pan[count:count+min_consecutive_frames] = True
+
+        else:
+            mean_dom_ang = np.nan
+
+        if debug:
+            print "[debug] f={}, t={}, dom_mag={}, dom_ang={}, mean_dom_ang={}, pan={}, tilt={}".format(
+                    frame,
+                    timestamps[count],
+                    cummulative_dom_mag[count],
+                    cummulative_dom_ang[count],
+                    mean_dom_ang,
+                    pan[count],
+                    tilt[count])
 
     if OF_overlay_videofile:
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
