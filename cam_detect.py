@@ -220,24 +220,27 @@ def detect_pan_tilt_zoom(videofile, OF_overlay_videofile=None):
     tilt = [False] * len(frame_nums)
     zoom = [False] * len(frame_nums)
 
-    min_consecutive_frames = 3
+    min_consecutive_frames = 4
     for count, frame in enumerate(frame_nums[:-min_consecutive_frames]):
         this_clip_pan_or_tilt = True
-        for i in range(count, count + min_consecutive_frames + 1):
+
+        for i in range(count, count + min_consecutive_frames):
             if math.isnan(cummulative_dom_mag[i]) or \
                     math.isnan(cummulative_dom_ang[i]):
                 this_clip_pan_or_tilt = False
 
         if this_clip_pan_or_tilt:
-            if (cummulative_dom_ang[count] >= 45 and \
-                cummulative_dom_ang[count] <= 135) or \
-               (cummulative_dom_ang[count] >= 225 and \
-                cummulative_dom_ang[count] <= 315):
+            if (cummulative_dom_ang[count] >= 45+20 and \
+                cummulative_dom_ang[count] <= 135-20) or \
+               (cummulative_dom_ang[count] >= 225+20 and \
+                cummulative_dom_ang[count] <= 315-20):
                 for i in range(count, count + min_consecutive_frames + 1):
-                    tilt[i] = True
+                    if not pan[i]:
+                        tilt[i] = True
             else:
                 for i in range(count, count + min_consecutive_frames + 1):
-                    pan[i] = True
+                    if not tilt[i]:
+                        pan[i] = True
 
     if OF_overlay_videofile:
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
